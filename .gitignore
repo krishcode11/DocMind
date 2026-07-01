@@ -10,3 +10,7 @@ wheels/
 .venv
 /uploads
 .env
+
+
+*.json
+omnisaas-c2bcad7649dd.json

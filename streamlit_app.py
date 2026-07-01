@@ -1,17 +1,28 @@
 import asyncio
 from pathlib import Path
 import time
-
 import streamlit as st
 import inngest
 from dotenv import load_dotenv
 import os
 import requests
+import uuid
+from gcs_storage import GCSStorage
 
 load_dotenv()
 
 st.set_page_config(page_title="RAG Ingest PDF", page_icon="📄", layout="centered")
 
+try:
+    asyncio.run(
+        send_rag_ingest_event(
+            path,
+            uploaded.name,
+        )
+    )
+finally:
+    if path.exists():
+        path.unlink()
 
 @st.cache_resource
 def get_inngest_client() -> inngest.Inngest:
@@ -27,14 +38,16 @@ def save_uploaded_pdf(file) -> Path:
     return file_path
 
 
-async def send_rag_ingest_event(pdf_path: Path) -> None:
+async def send_rag_ingest_event(pdf_path: Path,  filename: str) -> None:
+    storage = GCSStorage()
+    signed_url = storage.upload_pdf(str(pdf_path))
     client = get_inngest_client()
     await client.send(
         inngest.Event(
             name="rag/ingest_pdf",
             data={
-                "pdf_path": str(pdf_path.resolve()),
-                "source_id": pdf_path.name,
+                "pdf_url": signed_url,
+                "source_id": f"{uploaded.name}-{uuid.uuid4()}",
             },
         )
     )
@@ -47,7 +60,7 @@ if uploaded is not None:
     with st.spinner("Uploading and triggering ingestion..."):
         path = save_uploaded_pdf(uploaded)
         # Kick off the event and block until the send completes
-        asyncio.run(send_rag_ingest_event(path))
+        asyncio.run(send_rag_ingest_event(path, uploaded.name))
         # Small pause for user feedback continuity
         time.sleep(0.3)
     st.success(f"Triggered ingestion for: {path.name}")
